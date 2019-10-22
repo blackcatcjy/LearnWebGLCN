@@ -1,12 +1,18 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-	<meta charset="UTF-8">
-	<title>Hello Triangle</title>
-</head>
-<body width="100%" onload = "Main()">
-	<canvas id="webgl" width="600" height="600" style="border:1px red solid;">
-		Your Browser do not support 'html5-canvas', Please change your browser!
-	</canvas>
-</body>
-<script src="hello_triangle.js"></script>
+  <head>
+    <meta charset="utf-8" />
+    <title>Hello Triangle</title>
+  </head>
+
+  <body onload="main()">
+    <canvas id="webgl" width="800" height="600">
+    Please use a browser that supports "canvas"
+    </canvas>
+
+    <script src="../lib/webgl-utils.js"></script>
+    <script src="../lib/webgl-debug.js"></script>
+    <script src="../lib/cuon-utils.js"></script>
+    <script src="hello_triangle.js"></script>
+  </body>
+</html>
