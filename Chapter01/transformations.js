@@ -50,6 +50,13 @@ function main() {
     return;
   }
 
+
+    // Set texture
+    if (!initTextures(gl, n)) {
+        console.log("Failed to intialize the texture.");
+        return;
+      }
+
   // Specify the color for clearing <canvas>
   gl.clearColor(0.2, 0.3, 0.3, 1);
 
@@ -65,6 +72,7 @@ function main() {
   var modelMatrix = new Matrix4();
 
 
+
     // Start drawing
   var tick = function() {
     currentAngle = animate(currentAngle); // Update the rotation angle
@@ -74,11 +82,7 @@ function main() {
   tick();
 
 
-  // Set texture
-  if (!initTextures(gl, n)) {
-    console.log("Failed to intialize the texture.");
-    return;
-  }
+
 }
 
 function initVertexBuffers(gl) {
