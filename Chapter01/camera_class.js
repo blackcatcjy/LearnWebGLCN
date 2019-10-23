@@ -21,6 +21,89 @@ var FSHADER_SOURCE =
   '}\n';
 
   var ANGLE_STEP = 45.0;
+
+
+  var offset_Fov = 0.0;
+  function mousewhellFun(ev){
+    if(ev.wheelDelta > 0)
+        offset_Fov += 1;
+    if(ev.wheelDelta <0 )
+        offset_Fov -= 1;
+  }
+
+
+  var offset_EyeX = 0.0;
+  var offset_EyeY = 0.0;
+  var offset_EyeZ = 3.0;
+  var offset_LookAtX = 0.0;
+  var offset_LookAtY = 0.0;
+  var offset_LookAtZ = 0.0;
+  function keydownFun(ev){
+    if(ev.keyCode == 87)
+        offset_EyeZ -= 0.05;
+    if(ev.keyCode == 83)
+        offset_EyeZ += 0.05;
+    if(ev.keyCode == 68)
+        offset_EyeX += 0.05;
+    if(ev.keyCode == 65)
+        offset_EyeX -= 0.05;
+  }
+
+  var last_MousePosX;
+  var last_MousePosY;
+  function mousedownFun(ev){
+    last_MousePosX = ev.clientX;
+    last_MousePosY = ev.clientY;
+  }
+
+  var vec_Front = [0.0, 0.0 , -1];
+
+  function radians(angle){
+      return angle * Math.PI / 180.0;
+
+  }
+
+  function mousemoveFun(ev){
+      if(ev.buttons != 1 && ev.buttons != 4){
+          return;
+      }
+
+      var cur_MousePosX = ev.clientX;
+      var cur_MousePosY = ev.clientY;
+
+      if(ev.buttons == 1)
+      {
+          offset_EyeX += -0.05 * (cur_MousePosX - last_MousePosX);
+          offset_EyeY += -0.05 * (last_MousePosY - cur_MousePosY);
+          offset_LookAtX += -0.05 * (cur_MousePosX - last_MousePosX);
+          offset_LookAtY += -0.05 * (last_MousePosY - cur_MousePosY);
+      }
+
+      if(ev.buttons == 4){
+        offset_EyeX += -0.05 * (cur_MousePosX - last_MousePosX);
+        offset_EyeY += -0.05 * (last_MousePosY - cur_MousePosY);
+       }
+
+      last_MousePosX = cur_MousePosX;
+      last_MousePosY = cur_MousePosY;
+  }
+
+  function eventMouseOver()
+  {
+      document.addEventListener('mousewheel', mousewhellFun);
+      document.addEventListener('keydown', keydownFun);
+      document.addEventListener('mousedown',mousedownFun);
+      document.addEventListener('mousemove',mousemoveFun);
+  }
+
+  function eventMouseOut()
+  {
+      document.removeEventListener('mousewheel',mousewhellFun);
+      document.removeEventListener('keydown', keydownFun);
+      document.removeEventListener('mousedown',mousedownFun);
+      document.removeEventListener('mousemove',mousemoveFun);
+  }
+
   function main() {
     // Retrieve <canvas> element
     var canvas = document.getElementById('webgl');
@@ -65,30 +148,31 @@ var FSHADER_SOURCE =
       console.log('Failed to intialize the texture.');
       return;
     }
-    var offset_EyeX = 0.0;
-    var offset_EyeY = 0.0;
-    document.onkeydown = function(ev){
-        if(ev.keyCode == 87)
-            offset_EyeY += 0.05;
-        if(ev.keyCode == 83)
-            offset_EyeY -= 0.05;
-        if(ev.keyCode == 65)
-            offset_EyeX -= 0.05;
-        if(ev.keyCode == 68)
-            offset_EyeX += 0.05;
-    }
 
-    var offset_Fov = 0.0;
-    document.onmousewheel = function(ev){
-        if(ev.wheelDelta > 0)
-            offset_Fov += 1;
-        if(ev.wheelDelta <0 )
-            offset_Fov -= 1;
-    }
+    // document.addEventListener('keydown',function(ev){
+    //     if(ev.keyCode == 87)
+    //         offset_EyeY += 0.05;
+    //     if(ev.keyCode == 83)
+    //         offset_EyeY -= 0.05;
+    //     if(ev.keyCode == 65)
+    //         offset_EyeX -= 0.05;
+    //     if(ev.keyCode == 68)
+    //         offset_EyeX += 0.05;
+    // }); 
+
+    // var offset_Fov = 0.0;
+    // document.onmousewheel = function(ev){
+    //     if(ev.wheelDelta > 0)
+    //         offset_Fov += 1;
+    //     if(ev.wheelDelta <0 )
+    //         offset_Fov -= 1;
+    // }
+
 
     var currentAngle = 0.0;
     var tick = function() {
-      viewMatrix.setLookAt(offset_EyeX , offset_EyeY , 3 , offset_EyeX , offset_EyeY , 0 , 0 , 1 , 0 );
+      
+      viewMatrix.setLookAt(offset_EyeX , offset_EyeY , offset_EyeZ ,  offset_LookAtX , offset_LookAtY  , offset_LookAtZ , 0 , 1 , 0 );
       projectionMatrix.setPerspective(45.0 + offset_Fov , canvas.width / canvas.height, 1, 100);
       currentAngle = animate(currentAngle); // Update the rotation angle
       draw(gl, n, currentAngle, modelMatrix, viewMatrix, projectionMatrix, mvpMatrix, u_MvpMatrix); // Draw the triangle
@@ -306,7 +390,4 @@ function draw(gl, n, currentAngle, modelMatrix, viewMatrix, projectionMatrix, mv
         // Draw the rectangle
         gl.drawArrays(gl.TRIANGLES, 0, n);
     }
-
-
-  
 }
