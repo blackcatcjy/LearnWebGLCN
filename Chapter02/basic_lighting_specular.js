@@ -18,18 +18,27 @@ var COLOR_FSHADER_SOURCE =
   "uniform vec3 u_ObjColor;\n" +
   "uniform vec3 u_LightColor;\n" +
   "uniform vec3 u_lampPos;\n" +
+  "uniform vec3 u_ViewPos;\n" +
   "varying vec3 v_Normal;\n" +
   "varying vec3 v_FragPos;\n" + 
   "void main() {\n" +
-//   "  gl_FragColor = v_Normal * u_LightColor * u_ObjColor ;\n" +
+
+  //ambient
   "  float ambientStrength = 0.1;\n" +
   "  vec3 ambient  = ambientStrength * u_LightColor;\n" +
-
+  //diffuse
   "  vec3 norm = normalize(v_Normal);\n" + 
   "  vec3 lightDir = normalize(u_lampPos - v_FragPos);\n" +
   "  float diff = max(dot(norm, lightDir), 0.0);\n" +
   "  vec3 diffuse = diff * u_LightColor;\n" +
-  "  vec3 result = (ambient + diffuse) * u_ObjColor;\n" +
+  // specular
+  "  float specularStrength = 0.5;\n" +
+  "  vec3 viewDir = normalize(u_ViewPos - v_FragPos);\n" +
+  "  vec3 reflectDir = reflect(-lightDir, norm);\n" +
+  "  float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32.0);\n" +
+  "  vec3 specular = specularStrength * spec * u_LightColor;\n" +
+
+  "  vec3 result = (specular + ambient + diffuse) * u_ObjColor;\n" +
   "  gl_FragColor = vec4(result, 1.0);\n" +
   "}\n";
 
@@ -161,11 +170,14 @@ function main() {
   gl.uniform3f(u_ObjColor, 1.0, 0.5, 0.31);
 
   var u_LightColor = gl.getUniformLocation(gl.program, "u_LightColor");
-  gl.uniform3f(u_LightColor, 1.0, 1.0, 1.0);
+  gl.uniform3f(u_LightColor, 0.5, 0.6, 0.2);
 
   
   var u_lampPos = gl.getUniformLocation(gl.program, "u_lampPos");
   gl.uniform3f(u_lampPos, 1.2, 1.0, 2.0);
+
+  var u_ViewPos = gl.getUniformLocation(gl.program, "u_ViewPos");
+  gl.uniform3f(u_ViewPos, -1.2, -1.0, 2);
 
   gl.drawArrays(gl.TRIANGLES, 0, n);
 
@@ -180,7 +192,7 @@ function main() {
   }
 
   var u_LightColor = gl.getUniformLocation(gl.program, "u_LightColor");
-  gl.uniform4f(u_LightColor, 1.0, 1.0, 1.0, 1);
+  gl.uniform4f(u_LightColor, 1.0, 1, 1, 1);
 
   var u_LampMvpMatrix = gl.getUniformLocation(gl.program, "u_MvpMatrix");
   gl.uniformMatrix4fv(u_LampMvpMatrix, false, lampMvpMatrix.elements);
