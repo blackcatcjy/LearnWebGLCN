@@ -26,58 +26,135 @@ var COLOR_FSHADER_SOURCE =
   "  float shininess;\n" +
   "};\n" +
 
-  "struct Light {\n" +
-  "  vec3 position;\n" +
+  "struct DirLight  {\n" +
   "  vec3 direction;\n" +
 
   "  vec3 ambient;\n" +
   "  vec3 diffuse;\n" +
   "  vec3 specular;\n" +
 
+  "};\n" +
+
+  "struct PointLight   {\n" +
+  "  vec3 position;\n" +
+
+  "  vec3 ambient;\n" +
+  "  vec3 diffuse;\n" +
+  "  vec3 specular;\n" +
+
+  "  float constant;\n" +  
+  "  float linear;\n" +  
+  "  float quadratic;\n" +  
+  "};\n" +
+
+
+  "struct SpotLight{\n" +
+  "  vec3 position;\n" +
+  "  vec3 direction;\n" +
   "  float cutOff;\n" +
   "  float outerCutOff;\n" +
 
-  "  float constant;\n" +
-  "  float linear;\n" +
-  "  float quadratic;\n" +
+  "  vec3 ambient;\n" +
+  "  vec3 diffuse;\n" +
+  "  vec3 specular;\n" +
+
+  "  float constant;\n" +  
+  "  float linear;\n" +  
+  "  float quadratic;\n" +  
   "};\n" +
 
+
+  "#define NR_POINT_LIGHTS 4 \n"+
   "uniform Material u_Material;\n" +
-  "uniform Light u_Light;\n" +
   "uniform vec3 u_ViewPos;\n" +
   "varying vec3 v_Normal;\n" +
   "varying vec3 v_FragPos;\n" + 
   "varying vec2 v_TexCoord;\n" + 
-  "void main() {\n" +
-  //ambient
-  "  vec3 ambient = u_Light.ambient * texture2D(u_Material.diffuse, v_TexCoord).rgb;\n" +
 
-  //diffuse
-  "  vec3 norm = normalize(v_Normal);\n" + 
-  "  vec3 lightDir = normalize(u_Light.position - v_FragPos);\n" +
-  "  float diff = max(dot(norm, lightDir), 0.0);\n" +
-  "  vec3 diffuse = u_Light.diffuse * diff * texture2D(u_Material.diffuse, v_TexCoord).rgb;\n" +
-  
+  "uniform DirLight u_DirLight;\n" + 
+  "uniform PointLight u_PointLights[NR_POINT_LIGHTS];\n" + 
+  "uniform SpotLight u_SpotLight;\n" + 
 
-  //specular
-  "  vec3 viewDir = normalize(u_ViewPos - v_FragPos);\n" +
-  "  vec3 reflectDir = reflect(-lightDir, norm);\n" +
+  // function prototypes
+  "vec3 CalcDirLight(DirLight light, vec3 normal, vec3 viewDir){\n" +
+  "  vec3 lightDir = normalize(-light.direction);\n" +
+  // diffuse shading
+  "  float diff = max(dot(normal, lightDir), 0.0);\n" +
+  // specular shading
+  "  vec3 reflectDir = reflect(-lightDir, normal);\n" +
   "  float spec = pow(max(dot(viewDir, reflectDir), 0.0), u_Material.shininess);\n" +
-  "  vec3 specular = u_Light.specular * spec * texture2D(u_Material.specular, v_TexCoord).rgb;\n" +
+  // combine results
+  "  vec3 ambient = light.ambient * vec3(texture2D(u_Material.diffuse, v_TexCoord));\n" +
+  "  vec3 diffuse = light.diffuse * diff * vec3(texture2D(u_Material.diffuse, v_TexCoord));\n" +
+  "  vec3 specular = light.specular * spec * vec3(texture2D(u_Material.specular, v_TexCoord));\n" +
+  "  return (ambient + diffuse + specular);\n" +
+  "}\n" + 
 
-  // spotlight (soft edges)
-  "  float theta = dot(lightDir, normalize(-u_Light.direction));\n" +
-  "  float epsilon = (u_Light.cutOff - u_Light.outerCutOff);\n" +
-  "  float intensity = clamp((theta - u_Light.outerCutOff) / epsilon, 0.0, 1.0);\n" +
-  "  diffuse = intensity * diffuse;\n" +
-  "  specular = intensity * specular;\n" +
+  "vec3 CalcSpotLight(SpotLight light, vec3 normal, vec3 fragPos, vec3 viewDir){ \n"+
+  "  vec3 lightDir = normalize(light.position - fragPos);\n"+
+  // diffuse shading
+  "  float diff = max(dot(normal, lightDir), 0.0);\n"+
+  // specular shading
+  "  vec3 reflectDir = reflect(-lightDir, normal);\n"+
+  "  float spec = pow(max(dot(viewDir, reflectDir), 0.0), u_Material.shininess);\n"+
+  // attenuation
+  "  float distance = length(light.position - fragPos);\n"+
+  "  float attenuation = 1.0 / (light.constant + light.linear * distance + light.quadratic * (distance * distance));    \n"+
+  // spotlight intensity
+  "  float theta = dot(lightDir, normalize(-light.direction)); \n"+
+  "  float epsilon = light.cutOff - light.outerCutOff;\n"+
+  "  float intensity = clamp((theta - light.outerCutOff) / epsilon, 0.0, 1.0); \n"+
+  // combine results
+  "  vec3 ambient = light.ambient * vec3(texture2D(u_Material.diffuse, v_TexCoord));\n"+
+  "  vec3 diffuse = light.diffuse * diff * vec3(texture2D(u_Material.diffuse, v_TexCoord));\n"+
+  "  vec3 specular = light.specular * spec * vec3(texture2D(u_Material.specular, v_TexCoord));\n"+
+  "  ambient *= attenuation * intensity;\n"+
+  "  diffuse *= attenuation * intensity;\n"+
+  "  specular *= attenuation * intensity;\n"+
+  "  return (ambient + diffuse + specular);\n"+
+  "}\n" + 
 
-   // attenuation
-  "  float distance    = length(u_Light.position - v_FragPos);\n" +  
-  "  float attenuation = 1.0 / (u_Light.constant + u_Light.linear * distance + u_Light.quadratic * (distance * distance));\n" +    
-  "  vec3 result = attenuation* specular + attenuation * ambient + attenuation * diffuse;\n" +
-  "  gl_FragColor = vec4(result, 1.0);\n" +
-  "}\n";
+  "vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir)\n"+
+  "{\n"+
+  "  vec3 lightDir = normalize(light.position - fragPos);\n"+
+  // diffuse shading
+  "  float diff = max(dot(normal, lightDir), 0.0);\n"+
+    // specular shading
+  "  vec3 reflectDir = reflect(-lightDir, normal);\n"+
+  "  float spec = pow(max(dot(viewDir, reflectDir), 0.0), u_Material.shininess);\n"+
+    // attenuation
+  "  float distance = length(light.position - fragPos);\n"+
+  "  float attenuation = 1.0 / (light.constant + light.linear * distance + light.quadratic * (distance * distance)); \n"+   
+    // combine results
+  "  vec3 ambient = light.ambient * vec3(texture2D(u_Material.diffuse, v_TexCoord));\n"+
+  "  vec3 diffuse = light.diffuse * diff * vec3(texture2D(u_Material.diffuse, v_TexCoord));\n"+
+  "  vec3 specular = light.specular * spec * vec3(texture2D(u_Material.specular, v_TexCoord));\n"+
+  "  ambient *= attenuation;\n"+
+  "  diffuse *= attenuation;\n"+
+  "  specular *= attenuation;\n"+
+  "  return (ambient + diffuse + specular);\n"+
+  "}\n"+
+
+ "void main()\n" +
+ "{\n" +
+     // properties
+    "vec3 norm = normalize(v_Normal);\n" + 
+    "vec3 viewDir = normalize(u_ViewPos - v_FragPos);\n" +
+    // == =====================================================
+    // Our lighting is set up in 3 phases: directional, point lights and an optional flashlight
+    // For each phase, a calculate function is defined that calculates the corresponding color
+    // per lamp. In the main() function we take all the calculated colors and sum them up for
+    // this fragment's final color.
+    // == =====================================================
+    // phase 1: directional lighting
+    "vec3 result = CalcDirLight(u_DirLight, norm, viewDir);\n" +
+    // phase 2: point lights
+    "for(int i = 0; i < NR_POINT_LIGHTS; i++)\n" +
+    "    result += CalcPointLight(u_PointLights[i], norm, v_FragPos, viewDir);\n" +    
+    // phase 3: spot light
+    "result += CalcSpotLight(u_SpotLight, norm, v_FragPos, viewDir);\n" +    
+    "gl_FragColor = vec4(result, 1.0);\n" +
+  "}\n"; 
 
 var LAMP_VSHADER_SOURCE =
   "attribute vec4 a_Position;\n" +
@@ -271,7 +348,7 @@ function main() {
 
   if(initTextures(gl,n) ==false)
   {
-      console.log("Failed to set the Texture of the vertices");
+      console.log("Failed to set the texture2D of the vertices");
       return;
   }
 
@@ -352,10 +429,10 @@ function initVertexBuffers(gl , vertices , hasNormal ,hasTexCoord) {
 
 
 function initTextures(gl, n) {
-    var texture1 = gl.createTexture();   // Create a texture object
+    var texture1 = gl.createTexture();   // Create a texture2D object
     var texture2 = gl.createTexture();
     if (!texture1 || !texture2) {
-      console.log('Failed to create the texture object');
+      console.log('Failed to create the texture2D object');
       return false;
     }
   
@@ -389,41 +466,41 @@ function initTextures(gl, n) {
 
   
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1); // Flip the image's y axis
-    // Enable texture unit0
+    // Enable texture2D unit0
     gl.activeTexture(gl.TEXTURE0);
-    // Bind the texture object to the target
+    // Bind the texture2D object to the target
     gl.bindTexture(gl.TEXTURE_2D, texture1);
   
   
-    // set texture wrapping to GL_REPEAT (default wrapping method)
+    // set texture2D wrapping to GL_REPEAT (default wrapping method)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);	
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
   
-    // Set the texture parameters
+    // Set the texture2D parameters
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    // Set the texture image
+    // Set the texture2D image
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, image1);
     
-    // Set the texture unit 0 to the sampler
+    // Set the texture2D unit 0 to the sampler
     gl.uniform1i(u_Sampler1, 0);
   
-    //Enable texture unit1
+    //Enable texture2D unit1
     gl.activeTexture(gl.TEXTURE1);
-    // Bind the texture object to the target
+    // Bind the texture2D object to the target
     gl.bindTexture(gl.TEXTURE_2D, texture2);
   
-    // set texture wrapping to GL_REPEAT (default wrapping method)
+    // set texture2D wrapping to GL_REPEAT (default wrapping method)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);	
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
   
-    // Set the texture parameters
+    // Set the texture2D parameters
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
   
-    // Set the texture image
+    // Set the texture2D image
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image2);
-    // Set the texture unit 1 to the sampler
+    // Set the texture2D unit 1 to the sampler
     gl.uniform1i(u_Sampler2, 1);
   }
   
@@ -459,47 +536,133 @@ function draw(gl ,canvas ,n,currentAngle, colorProgram , lampProgram){
 
     
 
-    var u_LightAmbient = gl.getUniformLocation(gl.program, "u_Light.ambient");
-    // gl.uniform3f(u_LightAmbient, 0.5 * lightColorx, 0.5 * lightColory, 0.5 * lightColorz);
-    gl.uniform3f(u_LightAmbient, 0.1, 0.1, 0.1);
-    // console.log("1111");
-  
-    var u_LightDiffuse = gl.getUniformLocation(gl.program, "u_Light.diffuse");
-    // gl.uniform3f(u_LightDiffuse, 0.2 * lightColorx, 0.2 * lightColory , 0.2 * lightColorz);
-    gl.uniform3f(u_LightDiffuse, 0.8, 0.8, 0.8);
+    var pointLightPositions =new Float32Array([
+        0.7,  0.2,  2.0,
+        2.3, -3.3, -4.0,
+       -4.0,  2.0, -12.0,
+        0.0,  0.0, -3.0
+   ]);
+
+
+   //directional light
+   var u_DirLightDirection = gl.getUniformLocation(gl.program, "u_DirLight.direction");
+   gl.uniform1f(u_DirLightDirection ,  -0.2, -1.0, -0.3);
+
+   var u_DirLightAmbient = gl.getUniformLocation(gl.program, "u_DirLight.ambient");
+   gl.uniform1f(u_DirLightAmbient , 0.05, 0.05,0.05);   
+
+   var u_DirLightDiffuse = gl.getUniformLocation(gl.program, "u_DirLight.diffuse");
+   gl.uniform1f(u_DirLightDiffuse , 0.4, 0.4, 0.4);
+   
+   var u_DirLightSpecular = gl.getUniformLocation(gl.program, "u_DirLight.specular");
+   gl.uniform1f(u_DirLightSpecular , 0.5, 0.5, 0.5);
+
+
+   // point light 1
+   var u_PointLightsPosition = gl.getUniformLocation(gl.program, "u_PointLights[0].position");
+   gl.uniform3f(u_PointLightsPosition , 
+    pointLightPositions[0], 
+    pointLightPositions[1], 
+    pointLightPositions[2]);
+   var u_PointLightsAmbient = gl.getUniformLocation(gl.program,"u_PointLights[0].ambient");
+   gl.uniform3f(u_PointLightsAmbient , 0.05, 0.05, 0.05);
+   var u_PointLightsDiffuse = gl.getUniformLocation(gl.program,"u_PointLights[0].diffuse");
+   gl.uniform3f(u_PointLightsDiffuse , 0.8, 0.8, 0.8);
+   var u_PointLightsSpecular = gl.getUniformLocation(gl.program,"u_PointLights[0].specular");
+   gl.uniform3f(u_PointLightsSpecular , 1, 1, 1);
+   var u_PointLightsConstant = gl.getUniformLocation(gl.program,"u_PointLights[0].constant");
+   gl.uniform1f(u_PointLightsConstant , 1);
+   var u_PointLightsLinear = gl.getUniformLocation(gl.program,"u_PointLights[0].linear");   
+   gl.uniform1f(u_PointLightsLinear , 0.9);
+   var u_PointLightsQuadratic = gl.getUniformLocation(gl.program,"u_PointLights[0].quadratic");   
+   gl.uniform1f(u_PointLightsQuadratic , 0.032);
+
+
+      // point light 2
+    var u_PointLightsPosition = gl.getUniformLocation(gl.program, "u_PointLights[1].position");
+    gl.uniform3f(u_PointLightsPosition , 
+      pointLightPositions[3], 
+      pointLightPositions[4], 
+      pointLightPositions[5]);
+    var u_PointLightsAmbient = gl.getUniformLocation(gl.program,"u_PointLights[1].ambient");
+    gl.uniform3f(u_PointLightsAmbient , 0.05, 0.05, 0.05);
+    var u_PointLightsDiffuse = gl.getUniformLocation(gl.program,"u_PointLights[1].diffuse");
+    gl.uniform3f(u_PointLightsDiffuse , 0.8, 0.8, 0.8);
+    var u_PointLightsSpecular = gl.getUniformLocation(gl.program,"u_PointLights[1].specular");
+    gl.uniform3f(u_PointLightsSpecular , 1, 1, 1);
+    var u_PointLightsConstant = gl.getUniformLocation(gl.program,"u_PointLights[1].constant");
+    gl.uniform1f(u_PointLightsConstant , 1);
+    var u_PointLightsLinear = gl.getUniformLocation(gl.program,"u_PointLights[1].linear");   
+    gl.uniform1f(u_PointLightsLinear , 0.9);
+    var u_PointLightsQuadratic = gl.getUniformLocation(gl.program,"u_PointLights[1].quadratic");   
+    gl.uniform1f(u_PointLightsQuadratic , 0.032);
     
+    // point light 3
+    var u_PointLightsPosition = gl.getUniformLocation(gl.program, "u_PointLights[2].position");
+    gl.uniform3f(u_PointLightsPosition , 
+      pointLightPositions[6], 
+      pointLightPositions[7], 
+      pointLightPositions[8]);
+    var u_PointLightsAmbient = gl.getUniformLocation(gl.program,"u_PointLights[2].ambient");
+    gl.uniform3f(u_PointLightsAmbient , 0.05, 0.05, 0.05);
+    var u_PointLightsDiffuse = gl.getUniformLocation(gl.program,"u_PointLights[2].diffuse");
+    gl.uniform3f(u_PointLightsDiffuse , 0.8, 0.8, 0.8);
+    var u_PointLightsSpecular = gl.getUniformLocation(gl.program,"u_PointLights[2].specular");
+    gl.uniform3f(u_PointLightsSpecular , 1, 1, 1);
+    var u_PointLightsConstant = gl.getUniformLocation(gl.program,"u_PointLights[2].constant");
+    gl.uniform1f(u_PointLightsConstant , 1);
+    var u_PointLightsLinear = gl.getUniformLocation(gl.program,"u_PointLights[2].linear");   
+    gl.uniform1f(u_PointLightsLinear , 0.9);
+    var u_PointLightsQuadratic = gl.getUniformLocation(gl.program,"u_PointLights[2].quadratic");   
+    gl.uniform1f(u_PointLightsQuadratic , 0.032);
 
-    var u_LightSpecular = gl.getUniformLocation(gl.program, "u_Light.specular");
-    gl.uniform3f(u_LightSpecular, 1, 1, 1);
+    // point light 4
+    var u_PointLightsPosition = gl.getUniformLocation(gl.program, "u_PointLights[3].position");
+    gl.uniform3f(u_PointLightsPosition , 
+      pointLightPositions[9], 
+      pointLightPositions[10], 
+      pointLightPositions[11]);
+    var u_PointLightsAmbient = gl.getUniformLocation(gl.program,"u_PointLights[3].ambient");
+    gl.uniform3f(u_PointLightsAmbient , 0.05, 0.05, 0.05);
+    var u_PointLightsDiffuse = gl.getUniformLocation(gl.program,"u_PointLights[3].diffuse");
+    gl.uniform3f(u_PointLightsDiffuse , 0.8, 0.8, 0.8);
+    var u_PointLightsSpecular = gl.getUniformLocation(gl.program,"u_PointLights[3].specular");
+    gl.uniform3f(u_PointLightsSpecular , 1, 1, 1);
+    var u_PointLightsConstant = gl.getUniformLocation(gl.program,"u_PointLights[3].constant");
+    gl.uniform1f(u_PointLightsConstant , 1);
+    var u_PointLightsLinear = gl.getUniformLocation(gl.program,"u_PointLights[3].linear");   
+    gl.uniform1f(u_PointLightsLinear , 0.9);
+    var u_PointLightsQuadratic = gl.getUniformLocation(gl.program,"u_PointLights[3].quadratic");   
+    gl.uniform1f(u_PointLightsQuadratic , 0.032);
 
-    var u_LightPosition = gl.getUniformLocation(gl.program, "u_Light.position");
-    gl.uniform3f(u_LightPosition, offset_LightX, offset_LightY, offset_LightZ);
-    // console.log("点光源" ,  offset_LightX , offset_LightY , offset_LightZ);
-    // console.log("视点" , offset_EyeX , offset_EyeY , offset_EyeZ);
 
-    var u_LightDirection = gl.getUniformLocation(gl.program, "u_Light.direction");
-    gl.uniform3f(u_LightDirection, 0 , 0 , -1);
+    // spotLight
+   var u_SpotLightPosition = gl.getUniformLocation(gl.program, "u_SpotLight.position");
+   gl.uniform3f(u_SpotLightPosition , 0, 0, 3);
+   var u_SpotLightDirection = gl.getUniformLocation(gl.program, "u_SpotLight.direction");
+   gl.uniform3f(u_SpotLightDirection , 0, 0, -1);
+   var u_SpotLightAmbient = gl.getUniformLocation(gl.program, "u_SpotLight.ambient");
+   gl.uniform3f(u_SpotLightAmbient , 0, 0, 0);
+   var u_SpotLightDiffuse = gl.getUniformLocation(gl.program, "u_SpotLight.diffuse");
+   gl.uniform3f(u_SpotLightDiffuse , 1, 1, 1);
+   var u_SpotLightSpecular = gl.getUniformLocation(gl.program, "u_SpotLight.specular");   
+   gl.uniform3f(u_SpotLightSpecular , 1, 1, 1);
+   var u_SpotLightConstant = gl.getUniformLocation(gl.program,"u_SpotLight.constant");
+   gl.uniform1f(u_SpotLightConstant , 1);
+   var u_SpotLightLinear = gl.getUniformLocation(gl.program,"u_SpotLight.linear");    
+   gl.uniform1f(u_SpotLightLinear , 0.09);
+   var u_SpotLightQuadratic = gl.getUniformLocation(gl.program,"u_SpotLight.quadratic");       
+   gl.uniform1f(u_SpotLightQuadratic , 0.032);
+   var u_SpotLightCutOff = gl.getUniformLocation(gl.program,"u_SpotLight.cutOff");       
+   gl.uniform1f(u_SpotLightCutOff , Math.cos(radians(25)));
+   var u_SpotLightOuterCutOff = gl.getUniformLocation(gl.program,"u_SpotLight.outerCutOff");       
+   gl.uniform1f(u_SpotLightOuterCutOff , Math.cos(radians(35)));
 
+   
 
-    var u_LightCutOff = gl.getUniformLocation(gl.program, "u_Light.cutOff");
-    gl.uniform1f(u_LightCutOff, Math.cos(radians(25)));
-
-    var u_LightouterCutOff = gl.getUniformLocation(gl.program, "u_Light.outerCutOff");
-    gl.uniform1f(u_LightouterCutOff, Math.cos(radians(35)));
-
-    
-    var u_LightConstant = gl.getUniformLocation(gl.program, "u_Light.constant");
-    gl.uniform1f(u_LightConstant ,1.0);
-
-    var u_LightLinear = gl.getUniformLocation(gl.program, "u_Light.linear");
-    gl.uniform1f(u_LightLinear ,0.09);
-
-    var u_LightQuadratic = gl.getUniformLocation(gl.program,"u_Light.quadratic");
-    gl.uniform1f(u_LightQuadratic ,0.032);
-    // view position
-    var u_ViewPos = gl.getUniformLocation(gl.program, "u_ViewPos");
+   var u_ViewPos = gl.getUniformLocation(gl.program, "u_ViewPos");
     // console.log("u_ViewPos:" ,u_ViewPos);
-    gl.uniform3f(u_ViewPos,  offset_EyeX, offset_EyeY, offset_EyeZ);
+    gl.uniform3f(u_ViewPos,  2.3, -3.3, -4.0,);
 
     var colorModelMatrix = new Matrix4();
     var lampModelMatrix = new Matrix4();
@@ -523,6 +686,8 @@ function draw(gl ,canvas ,n,currentAngle, colorProgram , lampProgram){
         1.5,  0.2, -1.5,
         -1.3,  1.0, -1.5
     ]);
+
+
 
 
     viewMatrix.setLookAt( offset_EyeX, offset_EyeY, offset_EyeZ, offset_LookAtX, offset_LookAtY, offset_LookAtZ, 0, 1, 0);
@@ -558,21 +723,28 @@ function draw(gl ,canvas ,n,currentAngle, colorProgram , lampProgram){
 
         gl.drawArrays(gl.TRIANGLES, 0, n);
     }
-    // gl.useProgram(lampProgram);
-    // gl.program = lampProgram;
+    gl.useProgram(lampProgram);
+    gl.program = lampProgram;
 
-    // var u_LightColor = gl.getUniformLocation(gl.program, "u_LightColor");
-    // gl.uniform4f(u_LightColor, 1.0, 1, 1, 1);
-  
-    // lampModelMatrix.setTranslate(1.2, 1.0, 2.0);
-    // lampModelMatrix.scale(0.2, 0.2, 0.2);
-    // lampMvpMatrix
-    //   .set(prespectiveMatrix)
-    //   .multiply(viewMatrix)
-    //   .multiply(lampModelMatrix);
 
-    // var u_LampMvpMatrix = gl.getUniformLocation(gl.program, "u_MvpMatrix");
-    // gl.uniformMatrix4fv(u_LampMvpMatrix, false, lampMvpMatrix.elements);
-  
-    // gl.drawArrays(gl.TRIANGLES, 0, n);
+
+
+    var u_LightColor = gl.getUniformLocation(gl.program, "u_LightColor");
+    gl.uniform4f(u_LightColor, 1.0, 1, 1, 1);
+    for(var i = 0 ; i < 4 ; i++){
+        lampModelMatrix.setTranslate(pointLightPositions[ i * 3], 
+        pointLightPositions[i * 3 + 1],
+        pointLightPositions[i * 3 + 2],);
+        lampModelMatrix.scale(0.2, 0.2, 0.2);
+        lampMvpMatrix
+          .set(prespectiveMatrix)
+          .multiply(viewMatrix)
+          .multiply(lampModelMatrix);
+    
+        var u_LampMvpMatrix = gl.getUniformLocation(gl.program, "u_MvpMatrix");
+        gl.uniformMatrix4fv(u_LampMvpMatrix, false, lampMvpMatrix.elements);
+      
+        gl.drawArrays(gl.TRIANGLES, 0, n);
+    }
+
 }
